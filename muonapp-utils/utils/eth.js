@@ -55,14 +55,6 @@ const nameToChainIdMap = {
   optimismTestnet: 420, // Optimism Testnet
 }
 
-function getWsWeb3(network) {
-  if (_networksWsWeb3[network])
-    return Promise.resolve(_networksWsWeb3[network]);
-  else if (_networksWsWeb3[nameToChainIdMap[network]])
-    return Promise.resolve(_networksWsWeb3[nameToChainIdMap[network]]);
-  else return Promise.reject({ message: `invalid network "${network}"` });
-}
-
 function getWeb3(network) {
   if (_networksHttpWeb3[network])
     return Promise.resolve(_networksHttpWeb3[network]);
@@ -249,7 +241,6 @@ class Subscribe extends EventEmbitter {
 }
 
 module.exports = {
-  getWsWeb3,
   getWeb3,
   getBlock,
   getBlockNumber,
