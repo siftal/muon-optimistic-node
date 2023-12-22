@@ -80,8 +80,7 @@ router.get("/requests/:reqId", async (req, res) => {
   }
 });
 
-// Catch-all route for handling various requests and runnig the Muon apps
-router.use("*", async (req, res) => {
+router.use("/v1/", async (req, res) => {
   try {
     const mixed = {
       ...req.query,
@@ -90,13 +89,10 @@ router.use("*", async (req, res) => {
     const { app, method, params = {} } = mixed;
     const requestData = { app, method, params };
 
-    const requiredParameters = [
-      "collateralUser",
-      "collateralAsset",
-      "collateralAmount",
-    ];
     if (
-      !requiredParameters.every((parameter) => params.hasOwnProperty(parameter))
+      !params.collateralUser ||
+      !params.collateralAsset ||
+      !params.collateralAmount
     ) {
       throw new Error(
         "One or more required parameters (collateralUser, collateralAsset, collateralAmount) are missing.",
@@ -111,20 +107,19 @@ router.use("*", async (req, res) => {
     }
 
     if (params["collateralAmount"] > 0) {
-      for (const parameter of requiredParameters) {
-        result[parameter] = params[parameter];
-      }
-
       try {
-        const transaction = await lock(result);
+        const transaction = await lock(
+          result.appId,
+          result.reqId,
+          collateralAsset,
+          collateralAmount,
+          collateralUser,
+        );
         result["transactionHash"] = transaction.transactionHash;
       } catch (error) {
         throw new Error(`Transaction error: ${error.message}`);
       }
 
-      result["signParamsHash"] = MuonAppUtils.soliditySha3(
-        result.data.signParams.slice(2),
-      );
       result["status"] = "LOCKED";
       result["lockTime"] = Math.floor(Date.now() / 1000);
       saveRequest(result);

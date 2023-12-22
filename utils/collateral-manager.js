@@ -13,12 +13,18 @@ async function getCollateralManager() {
 }
 
 // Function to initiate a lock transaction
-async function lock(result) {
+async function lock(
+  appId,
+  reqId,
+  collateralAsset,
+  collateralAmount,
+  collateralUser,
+) {
   try {
     const collateralManager = await getCollateralManager();
     const web3 = await getWeb3(network);
     const collateralAmount = web3.utils.toWei(
-      result.collateralAmount.toString(),
+      collateralAmount.toString(),
       "wei",
     );
     const nodeAddress = process.env.WARRANTOR_ADDRESS;
@@ -27,11 +33,11 @@ async function lock(result) {
     const unlockables = await getUnlockables();
 
     const lockFunction = collateralManager.methods.lock(
-      result.collateralAsset,
+      collateralAsset,
       collateralAmount,
-      result.appId,
-      result.collateralUser,
-      result.reqId,
+      appId,
+      collateralUser,
+      reqId,
       unlockables,
     );
 

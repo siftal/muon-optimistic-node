@@ -1,4 +1,5 @@
 const { soliditySha3, sign } = require("../muonapp-utils/utils/crypto");
+const { utils: { randomHex } } = require("web3");
 
 function moduleIsAvailable(path) {
   try {
@@ -7,17 +8,6 @@ function moduleIsAvailable(path) {
   } catch (error) {
     return false;
   }
-}
-
-function calculateRequestId(request, resultHash) {
-  return soliditySha3([
-    { type: "address", value: request.nodeAddress },
-    { type: "uint32", value: request.data.timestamp },
-    { type: "uint256", value: request.appId },
-    { type: "string", value: soliditySha3(request.method) },
-    { type: "uint256", value: resultHash },
-    { type: "uint256", value: Math.floor(Date.now() / 1000) },
-  ]);
 }
 
 async function runMuonApp(request) {
@@ -31,7 +21,7 @@ async function runMuonApp(request) {
   const appId = BigInt(soliditySha3(`${app}.js`)).toString(10);
 
   const response = {
-    reqId: null,
+    reqId: randomHex(32),
     app,
     appId,
     method,
@@ -46,7 +36,6 @@ async function runMuonApp(request) {
   const onRequestResult = await muonApp.onRequest(response);
   const appSignParams = muonApp.signParams(response, onRequestResult);
   const hashSecurityParams = soliditySha3(appSignParams);
-  response.reqId = calculateRequestId(response, hashSecurityParams);
   response.data.signParams = [
     { name: "appId", type: "uint256", value: response.appId },
     { name: "reqId", type: "uint256", value: response.reqId },
