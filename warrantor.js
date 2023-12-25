@@ -86,14 +86,16 @@ router.use("/v1/", async (req, res) => {
       ...req.query,
       ...req.body,
     };
-    const { app, method, params = {} } = mixed;
+    const {
+      app,
+      method,
+      collateralUser,
+      collateralAsset,
+      collateralAmount,
+      params = {},
+    } = mixed;
     const requestData = { app, method, params };
-
-    if (
-      !params.collateralUser ||
-      !params.collateralAsset ||
-      !params.collateralAmount
-    ) {
+    if (!collateralUser || !collateralAsset || !collateralAmount) {
       throw new Error(
         "One or more required parameters (collateralUser, collateralAsset, collateralAmount) are missing.",
       );
