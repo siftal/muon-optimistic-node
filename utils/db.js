@@ -1,7 +1,6 @@
 const { MongoClient } = require("mongodb");
 
-const url = "mongodb://localhost:27017";
-const client = new MongoClient(url, {
+const client = new MongoClient(process.env.MONGO_URL, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });

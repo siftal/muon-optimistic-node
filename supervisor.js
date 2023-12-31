@@ -1,4 +1,4 @@
-require("dotenv").config();
+require('dotenv').config();
 const { runMuonApp } = require("./utils/muon-helpers");
 const { initializeDbCursor } = require("./utils/db");
 const {
@@ -12,69 +12,49 @@ global.MuonAppUtils = require("./muonapp-utils");
 
 const warrantors = require("./data/warrantors.json");
 const network = process.env.NETWORK;
-let isMonitoring = false;
-
-let lastProcessedBlockNumber = 0;
+const waitingBlocks = process.env.WAITING_BLOCKS;
 
 // Function to retrieve events from the collateral manager smart contract
-async function getEvents(collateralManager, fromBlock, toBlock) {
-  return await collateralManager.getPastEvents("Locked", {
-    fromBlock,
-    toBlock,
-  });
+async function getEvents(fromBlock, toBlock) {
+  console.error(`Getting events from block #${fromBlock} to block #${toBlock}`);
+  if (fromBlock > toBlock) {
+    return [];
+  }
+  try {
+    return await collateralManager.getPastEvents("Locked", {
+      fromBlock,
+      toBlock,
+    });
+  } catch (error) {
+    console.error("Error getting event: ", error.message);
+    // Halving number of querying blocks to resolve errors
+    // that are related to high number of blocks/events
+    // or pause the contract if it can not help
+    if (toBlock > fromBlock) {
+      const i = fromBlock + Math.floor((toBlock - fromBlock) / 2);
+      const events1 = await getEvents(fromBlock, i);
+      const events2 = await getEvents(i + 1, toBlock);
+      return events1.concat(events2);
+    } else {
+      await pause();
+      throw new Error("The contract is paused");
+    }
+  }
 }
 
 // Function to monitor events and initiate disputes if necessary
 async function monitor() {
-  if (isMonitoring) {
-    return;
-  }
-  isMonitoring = true;
-  const collateralManager = await getCollateralManager();
-  const web3 = await getWeb3(network);
-  const latestBlockNumber = await web3.eth.getBlockNumber();
-  if (lastProcessedBlockNumber == 0) {
-    lastProcessedBlockNumber = latestBlockNumber - 1000;
-  }
-
-  const fromBlock = lastProcessedBlockNumber + 1;
-  let toBlock = Math.min(fromBlock + 1000, latestBlockNumber);
-  let events;
-  try {
-    events = await getEvents(collateralManager, fromBlock, toBlock);
-  } catch (error) {
-    console.error("Error getting event: ", error.message);
-    toBlock = Math.floor((toBlock - fromBlock) / 2);
-    if (toBlock < 1) {
-      try {
-        const transaction = await pause();
-      } catch (error) {
-        throw new Error(`Transaction error: ${error.message}`);
-      }
-
-      throw new Error(
-        "Something went wrong, cannot get the events. pause the contract.",
-      );
-    }
-    events = await getEvents(collateralManager, fromBlock, toBlock);
-  }
-
-  console.log(`\nchecking events from block ${fromBlock} to block ${toBlock}`);
+  let fromBlock = lastProcessedBlock + 1;
+  let toBlock = (await web3.eth.getBlockNumber()) - waitingBlocks;
+  const events = await getEvents(fromBlock, toBlock);
   for (const event of events) {
     const verified = await isVerified(event);
     if (!verified) {
-      try {
-        const transaction = await dispute(event.returnValues.reqId);
-        // TODO: should save the disputes
-      } catch (error) {
-        throw new Error(`Transaction error: ${error.message}`);
-      }
+      await dispute(event.returnValues.reqId);
+      // TODO: should save the disputes
     }
-    lastProcessedBlockNumber = event.blockNumber - 1;
   }
-
-  lastProcessedBlockNumber = toBlock;
-  isMonitoring = false;
+  lastProcessedBlock = toBlock;
 }
 
 // Function to verify the authenticity of events
@@ -123,11 +103,16 @@ async function isVerified(event) {
 }
 
 // Function to initialize the monitoring process
+let web3, collateralManager, lastProcessedBlock;
 async function run() {
   await initializeDbCursor();
-  setInterval(monitor, 30000);
+  web3 = await getWeb3(network);
+  lastProcessedBlock = (await web3.eth.getBlockNumber()) - waitingBlocks;
+  collateralManager = await getCollateralManager();
+  while (true) {
+    await monitor();
+    await new Promise((r) => setTimeout(r, 30000));
+  }
 }
 
-run().catch((error) => {
-  console.error("An error occurred: ", error.message);
-});
+run();
